@@ -1,0 +1,6 @@
+pandas
+streamlit
+openpyxl
+altair
+matplotlib
+sqlite3 ; only needed for manual install if using Python <3.7
