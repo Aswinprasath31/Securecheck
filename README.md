@@ -1,5 +1,6 @@
 # 🚨 SecureCheck: A Python-SQL Digital Ledger for Police Post Logs
 
+<<<<<<< HEAD
 This project builds a real-time dashboard and database system for analyzing police traffic stops.
 
 ## 🔧 Tech Stack
@@ -18,3 +19,41 @@ This project builds a real-time dashboard and database system for analyzing poli
 ```bash
 cd app
 streamlit run streamlit_app.py
+=======
+This project enables digital transformation of police check posts by logging and analyzing vehicle stops using Python, SQL, and Streamlit.
+
+---
+
+## 📦 Features
+
+- Real-time logging of traffic stops
+- Gender & Violation filters
+- Violation frequency analysis
+- Night vs Day stop comparison
+- Dashboard built with Streamlit
+
+---
+
+## 🧑‍💻 Technologies
+
+- Python (pandas)
+- SQL (SQLite/MySQL)
+- Streamlit
+- Excel Dataset
+
+---
+
+## 📂 Folder Structure
+
+SecureCheck/
+├── data/
+│ └── traffic_stops.xlsx
+│ └── cleaned_traffic_stops.csv
+├── sql/
+│ └── create_tables.sql
+├── app/
+│ └── dashboard.py
+├── notebook/
+│ └── preprocessing.ipynb
+├── README.md
+>>>>>>> 896082939ad5170242e6324fcfe85528eaf4e958

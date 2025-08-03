@@ -1,4 +1,12 @@
+<<<<<<< HEAD
 streamlit
 pandas
 openpyxl
 sqlite3
+=======
+pandas
+streamlit
+openpyxl
+altair
+matplotlib
+>>>>>>> 896082939ad5170242e6324fcfe85528eaf4e958
