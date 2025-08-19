@@ -28,86 +28,63 @@ if not table_check:
 # Load data from DB
 df = pd.read_sql_query("SELECT * FROM check_post_logs", conn)
 
+# --- Feature Engineering: Add is_night_stop ---
+if "stop_time" in df.columns:
+    try:
+        df["stop_time"] = pd.to_datetime(df["stop_time"], errors="coerce").dt.time
+        hours = pd.to_datetime(df["stop_time"].astype(str), errors="coerce").dt.hour
+        df["is_night_stop"] = hours.apply(lambda x: True if pd.notnull(x) and (x >= 20 or x < 6) else False)
+    except Exception as e:
+        st.warning(f"⚠️ Couldn't process stop_time to create is_night_stop: {e}")
+
+# --- Dashboard UI ---
 st.title("🚨 SecureCheck - Police Traffic Stop Analytics")
 
-# --- SIDEBAR FILTERS ---
+# Sidebar Filters
 with st.sidebar:
     st.header("🔎 Filters")
-
-    # Violation filter
-    if "violation" in df.columns:
-        violation_filter = st.selectbox(
-            "Violation Type", ["All"] + sorted(df['violation'].dropna().unique())
-        )
-    else:
-        violation_filter = "All"
-
-    # Gender filter
-    if "driver_gender" in df.columns:
-        gender_filter = st.multiselect(
-            "Driver Gender", df['driver_gender'].dropna().unique()
-        )
-    else:
-        gender_filter = []
-
-    # Day/Night filter
+    violation_filter = st.selectbox("Violation Type", ["All"] + sorted(df['violation'].dropna().unique()))
+    gender_filter = st.multiselect("Driver Gender", df['driver_gender'].dropna().unique())
     if "is_night_stop" in df.columns:
-        day_night_filter = st.radio(
-            "Day vs Night", ["All", "Day", "Night"], horizontal=True
-        )
+        day_night_filter = st.radio("Day vs Night", ["All", "Day", "Night"], horizontal=True)
     else:
         day_night_filter = "All"
 
-# --- APPLY FILTERS ---
+# Apply Filters
 filtered_df = df.copy()
 
-if violation_filter != "All" and "violation" in df.columns:
+if violation_filter != "All":
     filtered_df = filtered_df[filtered_df['violation'] == violation_filter]
 
-if gender_filter and "driver_gender" in df.columns:
+if gender_filter:
     filtered_df = filtered_df[filtered_df['driver_gender'].isin(gender_filter)]
 
-if day_night_filter != "All" and "is_night_stop" in df.columns:
-    filtered_df = filtered_df[
-        filtered_df['is_night_stop'].astype(str) == str(day_night_filter == "Night")
-    ]
+if day_night_filter != "All" and "is_night_stop" in filtered_df.columns:
+    if day_night_filter == "Night":
+        filtered_df = filtered_df[filtered_df['is_night_stop'] == True]
+    else:
+        filtered_df = filtered_df[filtered_df['is_night_stop'] == False]
 
-# --- KPI CARDS ---
+# --- KPI Cards ---
 st.markdown("### 📊 Key Metrics")
-
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
     st.metric("Total Stops", filtered_df.shape[0])
 
 with col2:
-    if "violation" in filtered_df.columns:
-        st.metric("Unique Violations", filtered_df['violation'].nunique())
-    else:
-        st.metric("Unique Violations", "N/A")
+    st.metric("Unique Violations", filtered_df['violation'].nunique())
 
 with col3:
-    if "is_arrested" in filtered_df.columns:
-        st.metric(
-            "Arrests",
-            filtered_df['is_arrested'].astype(str).value_counts().get("True", 0),
-        )
-    else:
-        st.metric("Arrests", "N/A")
+    st.metric("Arrests", filtered_df['is_arrested'].astype(str).value_counts().get("True", 0))
 
 with col4:
-    if "drugs_related_stop" in filtered_df.columns:
-        st.metric(
-            "Drug-related Stops",
-            filtered_df['drugs_related_stop'].astype(str).value_counts().get("True", 0),
-        )
-    else:
-        st.metric("Drug-related Stops", "N/A")
+    st.metric("Drug-related Stops", filtered_df['drugs_related_stop'].astype(str).value_counts().get("True", 0))
 
 # --- TABS ---
 tab1, tab2, tab3 = st.tabs(["📑 Data Table", "📈 Charts", "🔍 Insights"])
 
-# Data Table View
+# Table View
 with tab1:
     st.subheader("Traffic Stop Records")
     st.dataframe(filtered_df, use_container_width=True)
@@ -115,41 +92,24 @@ with tab1:
 # Charts View
 with tab2:
     st.subheader("Visualization of Stops")
+    st.markdown("**Violation Distribution**")
+    st.bar_chart(filtered_df['violation'].value_counts())
 
-    if "violation" in filtered_df.columns:
-        st.markdown("**Violation Distribution**")
-        st.bar_chart(filtered_df['violation'].value_counts())
-    else:
-        st.info("ℹ️ Violation column not found in dataset.")
+    st.markdown("**Gender Distribution**")
+    st.bar_chart(filtered_df['driver_gender'].value_counts())
 
-    if "driver_gender" in filtered_df.columns:
-        st.markdown("**Gender Distribution**")
-        st.bar_chart(filtered_df['driver_gender'].value_counts())
-    else:
-        st.info("ℹ️ Driver gender column not found.")
-
+    # Day vs Night
     if "is_night_stop" in filtered_df.columns:
         st.markdown("**Day vs Night Stops**")
         st.bar_chart(filtered_df['is_night_stop'].value_counts())
-    else:
-        st.info("ℹ️ 'is_night_stop' column not found.")
 
-    # --- NEW: Time-series analysis ---
-    date_col = None
-    for col in ["stop_date", "date", "Date", "stop_datetime"]:
-        if col in filtered_df.columns:
-            date_col = col
-            break
-
-    if date_col:
+    # Time-series by stop_date
+    if "stop_date" in filtered_df.columns:
         st.markdown("**📅 Stops Over Time**")
         ts_df = filtered_df.copy()
-        ts_df[date_col] = pd.to_datetime(ts_df[date_col], errors="coerce")
-        ts_df = ts_df.dropna(subset=[date_col])
-        ts_summary = ts_df.groupby(ts_df[date_col].dt.date).size()
+        ts_df["stop_date"] = pd.to_datetime(ts_df["stop_date"], errors="coerce")
+        ts_summary = ts_df.groupby(ts_df["stop_date"].dt.date).size()
         st.line_chart(ts_summary)
-    else:
-        st.info("ℹ️ No date column found for time-series chart.")
 
 # Insights View
 with tab3:
@@ -157,25 +117,19 @@ with tab3:
     if filtered_df.empty:
         st.warning("No data available with current filters.")
     else:
-        if "violation" in filtered_df.columns:
-            common_violation = filtered_df['violation'].mode()[0]
-            st.write(f"- The **most common violation** is: **{common_violation}**")
+        common_violation = filtered_df['violation'].mode()[0]
+        arrest_rate = round(
+            (filtered_df['is_arrested'].astype(str).value_counts().get("True", 0) / len(filtered_df)) * 100,
+            2,
+        )
+        drug_rate = round(
+            (filtered_df['drugs_related_stop'].astype(str).value_counts().get("True", 0) / len(filtered_df)) * 100,
+            2,
+        )
 
-        if "is_arrested" in filtered_df.columns:
-            arrest_rate = round(
-                (filtered_df['is_arrested'].astype(str).value_counts().get("True", 0)
-                 / len(filtered_df)) * 100,
-                2,
-            )
-            st.write(f"- Overall **arrest rate** is: **{arrest_rate}%**")
+        st.write(f"- The **most common violation** is: **{common_violation}**")
+        st.write(f"- Overall **arrest rate** is: **{arrest_rate}%**")
+        st.write(f"- **Drug-related stops** make up: **{drug_rate}%** of the data")
 
-        if "drugs_related_stop" in filtered_df.columns:
-            drug_rate = round(
-                (filtered_df['drugs_related_stop'].astype(str).value_counts().get("True", 0)
-                 / len(filtered_df)) * 100,
-                2,
-            )
-            st.write(f"- **Drug-related stops** make up: **{drug_rate}%** of the data")
-
-# --- CLOSE DB ---
+# Close DB
 conn.close()
