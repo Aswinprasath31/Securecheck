@@ -28,14 +28,23 @@ if not table_check:
 # Load data from DB
 df = pd.read_sql_query("SELECT * FROM check_post_logs", conn)
 
-# --- Feature Engineering: Add is_night_stop ---
+# --- Feature Engineering ---
+# Convert stop_date
+if "stop_date" in df.columns:
+    df["stop_date"] = pd.to_datetime(df["stop_date"], errors="coerce")
+
+# Create is_night_stop from stop_time
 if "stop_time" in df.columns:
     try:
-        df["stop_time"] = pd.to_datetime(df["stop_time"], errors="coerce").dt.time
-        hours = pd.to_datetime(df["stop_time"].astype(str), errors="coerce").dt.hour
+        hours = pd.to_datetime(df["stop_time"], errors="coerce").dt.hour
         df["is_night_stop"] = hours.apply(lambda x: True if pd.notnull(x) and (x >= 20 or x < 6) else False)
-    except Exception as e:
-        st.warning(f"⚠️ Couldn't process stop_time to create is_night_stop: {e}")
+    except Exception:
+        st.warning("⚠️ Couldn't parse stop_time to generate is_night_stop")
+
+# Create derived time features
+if "stop_date" in df.columns:
+    df["stop_day_of_week"] = df["stop_date"].dt.day_name()   # Mon–Sun
+    df["is_weekend"] = df["stop_date"].dt.weekday >= 5       # Sat & Sun
 
 # --- Dashboard UI ---
 st.title("🚨 SecureCheck - Police Traffic Stop Analytics")
@@ -43,6 +52,7 @@ st.title("🚨 SecureCheck - Police Traffic Stop Analytics")
 # Sidebar Filters
 with st.sidebar:
     st.header("🔎 Filters")
+
     violation_filter = st.selectbox("Violation Type", ["All"] + sorted(df['violation'].dropna().unique()))
     gender_filter = st.multiselect("Driver Gender", df['driver_gender'].dropna().unique())
     if "is_night_stop" in df.columns:
@@ -65,7 +75,7 @@ if day_night_filter != "All" and "is_night_stop" in filtered_df.columns:
     else:
         filtered_df = filtered_df[filtered_df['is_night_stop'] == False]
 
-# --- KPI Cards ---
+# --- KPI CARDS ---
 st.markdown("### 📊 Key Metrics")
 col1, col2, col3, col4 = st.columns(4)
 
@@ -92,24 +102,30 @@ with tab1:
 # Charts View
 with tab2:
     st.subheader("Visualization of Stops")
+
     st.markdown("**Violation Distribution**")
     st.bar_chart(filtered_df['violation'].value_counts())
 
     st.markdown("**Gender Distribution**")
     st.bar_chart(filtered_df['driver_gender'].value_counts())
 
-    # Day vs Night
     if "is_night_stop" in filtered_df.columns:
         st.markdown("**Day vs Night Stops**")
         st.bar_chart(filtered_df['is_night_stop'].value_counts())
 
-    # Time-series by stop_date
     if "stop_date" in filtered_df.columns:
-        st.markdown("**📅 Stops Over Time**")
-        ts_df = filtered_df.copy()
-        ts_df["stop_date"] = pd.to_datetime(ts_df["stop_date"], errors="coerce")
-        ts_summary = ts_df.groupby(ts_df["stop_date"].dt.date).size()
+        st.markdown("**📅 Stops Over Time (Daily)**")
+        ts_summary = filtered_df.groupby(filtered_df["stop_date"].dt.date).size()
         st.line_chart(ts_summary)
+
+    if "stop_day_of_week" in filtered_df.columns:
+        st.markdown("**📅 Stops by Day of Week**")
+        order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        st.bar_chart(filtered_df["stop_day_of_week"].value_counts().reindex(order))
+
+    if "is_weekend" in filtered_df.columns:
+        st.markdown("**Weekday vs Weekend Stops**")
+        st.bar_chart(filtered_df["is_weekend"].map({True: "Weekend", False: "Weekday"}).value_counts())
 
 # Insights View
 with tab3:
@@ -130,6 +146,14 @@ with tab3:
         st.write(f"- The **most common violation** is: **{common_violation}**")
         st.write(f"- Overall **arrest rate** is: **{arrest_rate}%**")
         st.write(f"- **Drug-related stops** make up: **{drug_rate}%** of the data")
+
+        if "stop_day_of_week" in filtered_df.columns:
+            busiest_day = filtered_df["stop_day_of_week"].mode()[0]
+            st.write(f"- The **busiest day** for stops is: **{busiest_day}**")
+
+        if "is_weekend" in filtered_df.columns:
+            weekend_ratio = round((filtered_df["is_weekend"].sum() / len(filtered_df)) * 100, 2)
+            st.write(f"- **Weekend stops** account for about **{weekend_ratio}%** of all stops.")
 
 # Close DB
 conn.close()
