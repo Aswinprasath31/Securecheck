@@ -1,6 +1,5 @@
 # 🚨 SecureCheck: A Python-SQL Digital Ledger for Police Post Logs
 
-<<<<<<< HEAD
 This project builds a real-time dashboard and database system for analyzing police traffic stops.
 
 ## 🔧 Tech Stack
@@ -56,4 +55,3 @@ SecureCheck/
 ├── notebook/
 │ └── preprocessing.ipynb
 ├── README.md
->>>>>>> 896082939ad5170242e6324fcfe85528eaf4e958
