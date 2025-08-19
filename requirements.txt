@@ -2,9 +2,5 @@ streamlit
 pandas
 openpyxl
 sqlite3
-pandas
-streamlit
-openpyxl
-altair
 matplotlib
 
